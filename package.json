@@ -1,0 +1,20 @@
+{
+  "name": "ipomenunode",
+  "version": "1.0.0",
+  "main": "index.mjs",
+  "repository": "git@github.com:mons54/ipomenunode.git",
+  "author": "Julien Simonet <j.mons54@gmail.com>",
+  "license": "MIT",
+  "scripts": {
+    "dev": "nodemon src/index.mjs",
+    "prod": "node src/index.mjs"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^8.2.0",
+    "express": "^4.17.1",
+    "jszip": "^3.5.0",
+    "pdf-lib": "^1.12.0",
+    "puppeteer": "^5.5.0"
+  }
+}
