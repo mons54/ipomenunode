@@ -1,6 +1,87 @@
 import puppeteer from 'puppeteer'
-import { PDFDocument, rgb } from 'pdf-lib'
+import { PDFDocument } from 'pdf-lib'
 import { APP_NAME } from '../config/env.mjs'
+
+const margin = 12
+const border = 1
+
+function getDocumentWithMark (body, fonts, bleed) {
+  bleed += margin - border / 2
+  return `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <style>
+         @import url(${fonts});
+          body {
+            position: relative;
+            margin: 0;
+            padding: ${margin}px;
+          }
+          * {
+            box-sizing: border-box;
+          }
+          .bleed {
+            position: absolute;
+            border: ${border}px solid rgba(0, 0, 0);
+          }
+          .bleed--topleft {
+            top: 0;
+            height: ${margin}px;
+            left: ${bleed}px;
+          }
+          .bleed--topright {
+            top: 0;
+            height: ${margin}px;
+            right: ${bleed}px;
+          }
+          .bleed--bottomleft {
+            bottom: 0;
+            height: ${margin}px;
+            left: ${bleed}px;
+          }
+          .bleed--bottomright {
+            bottom: 0;
+            height: ${margin}px;
+            right: ${bleed}px;
+          }
+          .bleed--lefttop {
+            left: 0;
+            width: ${margin}px;
+            top: ${bleed}px;
+          }
+          .bleed--leftbottom {
+            left: 0;
+            width: ${margin}px;
+            bottom: ${bleed}px;
+          }
+          .bleed--righttop {
+            right: 0;
+            width: ${margin}px;
+            top: ${bleed}px;
+          }
+          .bleed--rightbottom {
+            right: 0;
+            width: ${margin}px;
+            bottom: ${bleed}px;
+          }
+        </style>
+      </head>
+      <body style="padding: ${margin}px">
+        ${body}
+        <div class="bleed bleed--topleft"></div>
+        <div class="bleed bleed--topright"></div>
+        <div class="bleed bleed--bottomleft"></div>
+        <div class="bleed bleed--bottomright"></div>
+        <div class="bleed bleed--lefttop"></div>
+        <div class="bleed bleed--leftbottom"></div>
+        <div class="bleed bleed--righttop"></div>
+        <div class="bleed bleed--rightbottom"></div>
+      </body>
+    </html>
+  `
+}
 
 function getDocument (body, fonts) {
 
@@ -33,86 +114,6 @@ async function getBrowser () {
   })
 }
 
-
-function bleedBox (page, width, height) {
-
-  const margin = 10
-
-  width *= 0.75
-  height *= 0.75
-
-  const pageWidth = page.getWidth()
-  const pageHeight = page.getHeight()
-
-  const line = {
-    thickness: 1,
-    color: rgb(0, 0, 0),
-  }
-
-  page.setWidth(pageWidth + margin * 2)
-  page.setHeight(pageHeight  + margin * 2)
-  page.translateContent(margin, margin)
-
-  const left = (pageWidth - width) / 2
-  const bottom = (pageHeight - height) / 2
-
-  const top = height + bottom
-  const right = width + left
-
-  // Left Top
-  line.start = { x: left, y: pageHeight }
-  line.end = { x: left, y: pageHeight + margin }
-  page.drawLine(line)
-
-  // Left Bottom
-  line.start = { x: left, y: 0 }
-  line.end = { x: left, y: -margin }
-  page.drawLine(line)
-
-  // Top Left
-  line.start = { x: 0, y: top }
-  line.end = { x: -margin, y: top }
-  page.drawLine(line)
-
-  // Top Right
-  line.start = { x: pageWidth, y: top }
-  line.end = { x: pageWidth + margin, y: top }
-  page.drawLine(line)
-
-  // Right Top
-  line.start = { x: right, y: pageHeight }
-  line.end = { x: right, y: pageHeight + margin }
-  page.drawLine(line)
-
-  // Right Bottom
-  line.start = { x: right, y: 0 }
-  line.end = { x: right, y: -margin }
-  page.drawLine(line)
-
-  // Bottom Left
-  line.start = { x: 0, y: bottom }
-  line.end = { x: -margin, y: bottom }
-  page.drawLine(line)
-
-  // Bottom Right
-  line.start = { x: pageWidth, y: bottom }
-  line.end = { x: pageWidth + margin, y: bottom }
-  page.drawLine(line)
-
-  page.setBleedBox(left + margin, bottom + margin, width, height)
-}
-
-function cropBox (page, width, height) {
-
-  width *= 0.75
-  height *= 0.75
-
-  const left = (page.getWidth() - width) / 2
-  const bottom = (page.getHeight() - height) / 2
-
-  page.setCropBox(left, bottom, width, height)
-}
-
 export async function pdf (pages, width, height, bleed, mark) {
 
   const bleedIn = bleed * 0.75
@@ -124,33 +125,28 @@ export async function pdf (pages, width, height, bleed, mark) {
 
   pages.forEach(page => {
 
-    const document = getDocument(page.html, page.fonts)
+    let document
+
+    if (mark)
+      document = getDocumentWithMark(page.html, page.fonts, bleed)
+    else
+      document = getDocument(page.html, page.fonts)
 
     promises.push(new Promise(async resolve => {
       const page = await browser.newPage()
       await page.goto('data:text/html,' + document, {
         waitUntil: 'networkidle0',
       })
-      await page.evaluate(() => {
-        const pageInner = document.getElementById('pageInner')
-        if (!pageInner)
-          return
-        pageInner.childNodes.forEach(element => {
-          if (element.offsetLeft > pageInner.offsetWidth)
-            element.style.display = 'none'
-        })
-
-      })
+      if (mark) {
+        width += bleed * 2 + margin * 2
+        height += bleed * 2 + margin * 2
+      }
       const data = await page.pdf({
         printBackground: true,
-        width: width + bleed * 2,
-        height: height + bleed * 2,
+        width,
+        height,
       })
       const [copy] = await pdf.copyPages(await PDFDocument.load(data), [0])
-      if (mark)
-        bleedBox(copy, width, height)
-      else
-        cropBox(copy, width, height)
       resolve(copy)
     }))
   })
@@ -193,12 +189,6 @@ export async function image (images, width, height, bleed, type = 'png') {
 
       resolve(await page.screenshot({
         type,
-        clip: {
-          x: bleed,
-          y: bleed,
-          width: width,
-          height: height,
-        },
       }))
     }))
   })
