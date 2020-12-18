@@ -117,7 +117,7 @@ async function getBrowser () {
   })
 }
 
-export async function pdf (pages, width, height, bleed, mark) {
+export async function pdf (pages, pageWidth, pageHeight, bleed, mark) {
 
   const bleedIn = bleed * 0.75
 
@@ -136,14 +136,21 @@ export async function pdf (pages, width, height, bleed, mark) {
       document = getDocument(page.html, page.fonts)
 
     promises.push(new Promise(async resolve => {
+
       const page = await browser.newPage()
+
       await page.goto('data:text/html,' + document, {
         waitUntil: 'networkidle0',
       })
+
+      let width = pageWidth
+      let height = pageHeight
+
       if (mark) {
         width += bleed * 2 + margin * 2
         height += bleed * 2 + margin * 2
       }
+      
       const data = await page.pdf({
         printBackground: true,
         width,
