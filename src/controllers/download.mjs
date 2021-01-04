@@ -1,7 +1,7 @@
 import express from 'express'
 import puppeteer from 'puppeteer'
 import Zip from 'jszip'
-import { pdf, image } from '../services/download.mjs'
+import { pdf, pdfMobile, image } from '../services/download.mjs'
 import { HttpInternalServerError, HttpNotAcceptableError } from '../services/httpError.mjs'
 
 const router = express.Router()
@@ -40,9 +40,37 @@ router.post('/pdf', async (req, res, next) => {
   }
 })
 
-router.post('/image/:type(png|jpeg|jpg)', async (req, res, next) => {
+router.post('/mobile', async (req, res, next) => {
 
-  let { images, width, height, bleed, mark } = req.body
+  let { pages, width, height, mark } = req.body
+
+  if (pages instanceof Array === false)
+    return next(new HttpNotAcceptableError("Param pages must be array"))
+
+  if (typeof width !== 'number')
+    return next(new HttpNotAcceptableError("Param width must be number"))
+
+  if (0 > width || width > 5000)
+    return next(new HttpNotAcceptableError("Param width must be > 0 and <= 5000"))
+
+  if (typeof height !== 'number')
+    return next(new HttpNotAcceptableError("Param height must be number"))
+
+  if (0 > height || height > 5000)
+    return next(new HttpNotAcceptableError("Param height must be > 0 and <= 5000"))
+
+  try {
+    const data = await pdfMobile(pages, width, height)
+    res.type('pdf')
+    res.send(data)
+  } catch(e) {
+    return next(new HttpInternalServerError(e.message, null, e))
+  }
+})
+
+router.post('/image/:type(png|jpeg)', async (req, res, next) => {
+
+  let { images, width, height } = req.body
 
   if (images instanceof Array === false)
     return next(new HttpNotAcceptableError("Param images must be Array"))
@@ -59,18 +87,12 @@ router.post('/image/:type(png|jpeg|jpg)', async (req, res, next) => {
   if (0 > height || height > 10000)
     return next(new HttpNotAcceptableError("Param height must be > 0 and <= 10000"))
 
-  if (typeof bleed !== 'number')
-    return next(new HttpNotAcceptableError("Param bleed must be number"))
-
-  if (0 > bleed)
-    return next(new HttpNotAcceptableError("Param bleed must be > 0"))
-
   const type = req.params.type
 
   let data
 
   try {
-    data = await image(images, width, height, bleed, type)
+    data = await image(images, width, height, type)
   } catch (e) {
     return next(new HttpInternalServerError(e.message, null, e))
   }

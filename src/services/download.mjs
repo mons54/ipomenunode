@@ -124,16 +124,24 @@ export async function pdf (pages, pageWidth, pageHeight, bleed, mark) {
   const pdf = await PDFDocument.create()
   const browser = await getBrowser()
 
-  let promises = []
+  const promises = []
 
-  pages.forEach(page => {
+  let width = pageWidth
+  let height = pageHeight
+
+  if (mark) {
+    width += bleed * 2 + margin * 2
+    height += bleed * 2 + margin * 2
+  }
+
+  pages.forEach(value => {
 
     let document
 
     if (mark)
-      document = getDocumentWithMark(page.html, page.fonts, bleed)
+      document = getDocumentWithMark(value.html, value.fonts, bleed)
     else
-      document = getDocument(page.html, page.fonts)
+      document = getDocument(value.html, value.fonts)
 
     promises.push(new Promise(async resolve => {
 
@@ -143,14 +151,6 @@ export async function pdf (pages, pageWidth, pageHeight, bleed, mark) {
         waitUntil: 'networkidle0',
       })
 
-      let width = pageWidth
-      let height = pageHeight
-
-      if (mark) {
-        width += bleed * 2 + margin * 2
-        height += bleed * 2 + margin * 2
-      }
-      
       const data = await page.pdf({
         printBackground: true,
         width,
@@ -173,8 +173,55 @@ export async function pdf (pages, pageWidth, pageHeight, bleed, mark) {
   return Buffer.from(await pdf.save())
 }
 
+export async function pdfMobile (pages, width, height, mark) {
 
-export async function image (images, width, height, bleed, type = 'png') {
+  const pdf = await PDFDocument.create()
+  const browser = await getBrowser()
+
+  for (const value of pages) {
+
+    const document = getDocument(value.html, value.fonts)
+
+    let x = 0
+
+    const page = await browser.newPage()
+
+    await page.goto('data:text/html,' + document, {
+      waitUntil: 'networkidle0',
+    })
+
+    const data = await page.pdf({
+      printBackground: true,
+      width,
+      height,
+    })
+
+    for (let width of value.areas) {
+
+      width *= 0.75
+
+      const [copy] = await pdf.copyPages(await PDFDocument.load(data), [0])
+
+      copy.translateContent(-x, 0)
+      copy.setWidth(width - 2)
+
+      x += width
+
+      pdf.addPage(copy)
+
+    }
+  }
+
+  browser.close()
+
+  pdf.setProducer(APP_NAME)
+  pdf.setCreator(APP_NAME)
+
+  return Buffer.from(await pdf.save())
+}
+
+
+export async function image (images, width, height, type = 'png') {
 
   const browser = await getBrowser()
 
